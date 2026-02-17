@@ -37,7 +37,12 @@ const jobSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
-
+    
+    isRated: {
+      type: Boolean,
+      default: false,
+    },
+    
     applications: [
   {
     worker: {

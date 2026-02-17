@@ -2,6 +2,7 @@ import express from "express";
 import Job from "../models/jobModel.js";
 import { protect } from "../middleware/authMiddleware.js";
 import authorizeRoles from "../middleware/roleMiddleware.js";
+import User from "../models/User.js";
 
 const router = express.Router();
 
@@ -123,7 +124,7 @@ router.put(
       job.applications = job.applications.filter(
         (app) => app.worker.equals(workerId)
       );
-      
+
       job.status = "IN_PROGRESS";
       job.assignedWorker = workerId;
 
@@ -202,6 +203,58 @@ router.get(
   }
 );
 
+router.put(
+  "/:jobId/rate",
+  protect,
+  authorizeRoles("client"),
+  async (req, res) => {
+    try {
+      const { rating } = req.body;
+
+      if (!rating || rating < 1 || rating > 5) {
+        return res.status(400).json({ message: "Rating must be between 1 and 5" });
+      }
+
+      const job = await Job.findById(req.params.jobId);
+
+      if (!job) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+
+      // Only job owner can rate
+      if (!job.client.equals(req.user._id)) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      // Job must be completed
+      if (job.status !== "COMPLETED") {
+        return res.status(400).json({ message: "Job not completed yet" });
+      }
+
+      // Prevent double rating
+      if (job.isRated) {
+        return res.status(400).json({ message: "Job already rated" });
+      }
+
+      // Update worker rating
+      const worker = await User.findById(job.assignedWorker);
+
+      worker.totalRating += rating;
+      worker.ratingCount += 1;
+      worker.rating = worker.totalRating / worker.ratingCount;
+
+      await worker.save();
+
+      job.isRated = true;
+      await job.save();
+
+      res.json({ message: "Worker rated successfully", worker });
+
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+);
 
 
 
