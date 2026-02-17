@@ -4,6 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import userRoutes from "./routes/userRoutes.js";
 import workerRoutes from "./routes/workerRoutes.js";
+import jobRoutes from "./routes/jobRoutes.js";
 
 
 dotenv.config();
@@ -18,6 +19,7 @@ app.use("/api/users", userRoutes);
 
 app.use("/api/workers", workerRoutes);
 
+app.use("/api/jobs", jobRoutes);
 
 //Test Route
 app.get("/", (req, res) => {
