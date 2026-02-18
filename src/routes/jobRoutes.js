@@ -37,14 +37,32 @@ router.get(
   protect,
   authorizeRoles("worker"),
   async (req, res) => {
-    const jobs = await Job.find({ status: "OPEN" }).populate(
-      "client",
-      "name phone"
-    );
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 5;
+      const skip = (page - 1) * limit;
 
-    res.json(jobs);
+      const filter = { status: "OPEN" };
+
+      const totalJobs = await Job.countDocuments(filter);
+
+      const jobs = await Job.find(filter)
+        .populate("client", "name phone")
+        .skip(skip)
+        .limit(limit);
+
+      res.json({
+        totalJobs,
+        totalPages: Math.ceil(totalJobs / limit),
+        currentPage: page,
+        jobs,
+      });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
   }
 );
+
 
 // Worker Apply to Job
 router.post(
@@ -183,6 +201,10 @@ router.get(
   authorizeRoles("worker"),
   async (req, res) => {
     try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 5;
+      const skip = (page - 1) * limit;
+
       const filter = {
         assignedWorker: req.user._id,
       };
@@ -191,10 +213,16 @@ router.get(
         filter.status = req.query.status;
       }
 
-      const jobs = await Job.find(filter);
+      const totalJobs = await Job.countDocuments(filter);
+
+      const jobs = await Job.find(filter)
+        .skip(skip)
+        .limit(limit);
 
       res.json({
-        count: jobs.length,
+        totalJobs,
+        totalPages: Math.ceil(totalJobs / limit),
+        currentPage: page,
         jobs,
       });
     } catch (error) {
@@ -250,6 +278,42 @@ router.put(
 
       res.json({ message: "Worker rated successfully", worker });
 
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+);
+
+router.get(
+  "/my-client-jobs",
+  protect,
+  authorizeRoles("client"),
+  async (req, res) => {
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 5;
+      const skip = (page - 1) * limit;
+
+      const filter = {
+        client: req.user._id,
+      };
+
+      if (req.query.status) {
+        filter.status = req.query.status;
+      }
+
+      const totalJobs = await Job.countDocuments(filter);
+
+      const jobs = await Job.find(filter)
+        .skip(skip)
+        .limit(limit);
+
+      res.json({
+        totalJobs,
+        totalPages: Math.ceil(totalJobs / limit),
+        currentPage: page,
+        jobs,
+      });
     } catch (error) {
       res.status(500).json({ message: error.message });
     }
