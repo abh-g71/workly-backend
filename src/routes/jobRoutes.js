@@ -3,6 +3,7 @@ import Job from "../models/jobModel.js";
 import { protect } from "../middleware/authMiddleware.js";
 import authorizeRoles from "../middleware/roleMiddleware.js";
 import User from "../models/User.js";
+import Worker from "../models/workerModel.js";
 
 const router = express.Router();
 
@@ -38,25 +39,37 @@ router.get(
   authorizeRoles("worker"),
   async (req, res) => {
     try {
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 5;
-      const skip = (page - 1) * limit;
+      const Worker = (await import("../models/workerModel.js")).default;
 
-      const filter = { status: "OPEN" };
+      const workerProfile = await Worker.findOne({ user: req.user._id });
 
-      const totalJobs = await Job.countDocuments(filter);
+      if (!workerProfile) {
+        return res.status(400).json({ message: "PROFILE_INCOMPLETE" });
+      }
 
-      const jobs = await Job.find(filter)
-        .populate("client", "name phone")
-        .skip(skip)
-        .limit(limit);
+      const openJobs = await Job.find({ status: "OPEN" })
+        .populate("client", "name phone");
 
-      res.json({
-        totalJobs,
-        totalPages: Math.ceil(totalJobs / limit),
-        currentPage: page,
-        jobs,
-      });
+      // Compute match score
+      const rankedJobs = openJobs
+        .map((job) => {
+          const matchedSkills = job.requiredSkills.filter((skill) =>
+            workerProfile.skills.includes(skill)
+          );
+
+          const matchScore =
+            (matchedSkills.length / job.requiredSkills.length) * 100;
+
+          return {
+            ...job.toObject(),
+            matchPercentage: Math.round(matchScore),
+          };
+        })
+        .filter((job) => job.matchPercentage > 0) // remove 0% matches
+        .sort((a, b) => b.matchPercentage - a.matchPercentage); // highest first
+
+      res.json({ jobs: rankedJobs });
+
     } catch (error) {
       res.status(500).json({ message: error.message });
     }

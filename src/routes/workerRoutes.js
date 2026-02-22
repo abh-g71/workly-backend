@@ -15,6 +15,21 @@ router.post(
     try {
       const { skills, experience, location, hourlyRate } = req.body;
 
+      // Check if worker profile already exists
+      const existingProfile = await Worker.findOne({ user: req.user._id });
+
+      if (existingProfile) {
+        return res.status(400).json({
+          message: "Worker profile already exists",
+        });
+      }
+
+      if (!skills || !experience || !location || !hourlyRate) {
+        return res.status(400).json({
+          message: "All fields are required",
+        });
+      }
+
       const worker = await Worker.create({
         user: req.user._id,
         skills,
@@ -23,7 +38,11 @@ router.post(
         hourlyRate,
       });
 
-      res.status(201).json(worker);
+      res.status(201).json({
+        message: "Worker profile created successfully",
+        worker,
+      });
+
     } catch (error) {
       res.status(500).json({ message: error.message });
     }

@@ -1,20 +1,18 @@
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
+import Worker from "../models/workerModel.js";
 
 
-// Register User
 export const registerUser = async (req, res) => {
   try {
     const { name, phone, role } = req.body;
 
-    // Basic validation
     if (!name || !phone || !role) {
       return res.status(400).json({
         message: "Name, phone and role are required",
       });
     }
 
-    // Check if user already exists
     const existingUser = await User.findOne({ phone });
 
     if (existingUser) {
@@ -23,7 +21,6 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    // Create new user
     const user = await User.create({
       name,
       phone,
