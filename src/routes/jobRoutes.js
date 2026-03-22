@@ -25,6 +25,14 @@ router.post(
         budget,
       });
 
+      const io = req.app.get("io");
+
+      
+      setTimeout(() => {
+        console.log("🚀 Emitting jobUpdated");
+        io.emit("jobUpdated");
+      }, 200);
+
       res.status(201).json(job);
     } catch (error) {
       res.status(500).json({ message: error.message });
@@ -66,7 +74,12 @@ router.get(
           };
         })
         .filter((job) => job.matchPercentage > 0) // remove 0% matches
-        .sort((a, b) => b.matchPercentage - a.matchPercentage); // highest first
+        .sort((a, b) => {
+            if (b.matchPercentage === a.matchPercentage) {
+              return new Date(b.createdAt) - new Date(a.createdAt);
+            }
+            return b.matchPercentage - a.matchPercentage;
+          });
 
       res.json({ jobs: rankedJobs });
 
@@ -113,6 +126,14 @@ if (alreadyApplied) {
 
       await job.save();
 
+      const io = req.app.get("io");
+
+      // ensure emit happens AFTER DB is fully settled
+      setTimeout(() => {
+        console.log("🚀 Emitting jobUpdated");
+        io.emit("jobUpdated");
+      }, 200);
+
       res.json({ message: "Application submitted successfully" });
     } catch (error) {
       res.status(500).json({ message: error.message });
@@ -145,15 +166,15 @@ router.put(
       }
 
       // Check if worker applied
-      const hasApplied = job.applications.some(app =>
-        app.worker.equals(workerId)
+      const hasApplied = job.applications.some(
+        (app) => app.worker.toString() === workerId.toString()
       );
 
       if (!hasApplied) {
         return res.status(400).json({ message: "Worker did not apply" });
       }
       job.applications = job.applications.filter(
-        (app) => app.worker.equals(workerId)
+        (app) => app.worker.toString() === workerId.toString()
       );
 
       job.status = "IN_PROGRESS";
@@ -229,8 +250,9 @@ router.get(
       const totalJobs = await Job.countDocuments(filter);
 
       const jobs = await Job.find(filter)
-        .skip(skip)
-        .limit(limit);
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
       res.json({
         totalJobs,
@@ -318,8 +340,9 @@ router.get(
       const totalJobs = await Job.countDocuments(filter);
 
       const jobs = await Job.find(filter)
-        .skip(skip)
-        .limit(limit);
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
       res.json({
         totalJobs,

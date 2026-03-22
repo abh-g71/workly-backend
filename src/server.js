@@ -5,6 +5,9 @@ import dotenv from "dotenv";
 import userRoutes from "./routes/userRoutes.js";
 import workerRoutes from "./routes/workerRoutes.js";
 import jobRoutes from "./routes/jobRoutes.js";
+import http from "http";
+import { Server } from "socket.io";
+
 
 
 dotenv.config();
@@ -29,12 +32,33 @@ app.get("/", (req, res) => {
 //MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
-    console.log("MongoDB Connected ✅" );
+    console.log("MongoDB Connected ✅");
 
-    app.listen(process.env.PORT, () => {
-      console.log(`Server running on PORT ${process.env.PORT} `);
+    const server = http.createServer(app);
+
+    const io = new Server(server, {
+      cors: {
+        origin: "*",
+      },
     });
-  })
+
+    // attach io to app
+    app.set("io", io);
+
+    io.on("connection", (socket) => {
+      console.log("🔌 New client connected:", socket.id);
+
+      socket.on("disconnect", () => {
+        console.log("❌ Client disconnected:", socket.id);
+      });
+    });
+
+    server.listen(process.env.PORT, () => {
+      console.log(`Server running on PORT ${process.env.PORT}`);
+    });
+
+  }) // ✅ THIS WAS MISSING
   .catch((err) => {
     console.error("MongoDB connection failed ❌", err);
   });
+  
