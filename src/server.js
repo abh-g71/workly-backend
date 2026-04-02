@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import userRoutes from "./routes/userRoutes.js";
 import workerRoutes from "./routes/workerRoutes.js";
 import jobRoutes from "./routes/jobRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import http from "http";
 import { Server } from "socket.io";
 
@@ -23,6 +24,8 @@ app.use("/api/users", userRoutes);
 app.use("/api/workers", workerRoutes);
 
 app.use("/api/jobs", jobRoutes);
+
+app.use("/api/notifications", notificationRoutes);
 
 //Test Route
 app.get("/", (req, res) => {

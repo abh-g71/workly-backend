@@ -60,4 +60,48 @@ router.get(
   }
 );
 
+// Get worker profile
+router.get(
+  "/me",
+  protect,
+  authorizeRoles("worker"),
+  async (req, res) => {
+    try {
+      const profile = await Worker.findOne({ user: req.user._id });
+      res.json({ hasProfile: !!profile, profile });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+);
+
+// Update Worker Profile
+router.put(
+  "/update",
+  protect,
+  authorizeRoles("worker"),
+  async (req, res) => {
+    try {
+      const { skills, experience, location, hourlyRate } = req.body;
+
+      const profile = await Worker.findOne({ user: req.user._id });
+
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      profile.skills = skills.map((s) => s.toLowerCase().trim());
+      profile.experience = experience;
+      profile.location = location;
+      profile.hourlyRate = hourlyRate;
+
+      await profile.save();
+
+      res.json({ message: "Profile updated successfully", profile });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+);
+
 export default router;

@@ -14,4 +14,8 @@ router.get("/profile", protect, (req, res) => {
   });
 });
 
+router.get("/me", protect, (req, res) => {
+  res.json(req.user);
+});
+
 export default router;

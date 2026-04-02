@@ -4,6 +4,7 @@ import { protect } from "../middleware/authMiddleware.js";
 import authorizeRoles from "../middleware/roleMiddleware.js";
 import User from "../models/User.js";
 import Worker from "../models/workerModel.js";
+import Notification from "../models/notificationModel.js";
 
 const router = express.Router();
 
@@ -14,23 +15,38 @@ router.post(
   authorizeRoles("client"),
   async (req, res) => {
     try {
-      const { title, description, requiredSkills, location, budget } = req.body;
+      const { title, description, requiredSkills, location, budget, coordinates } = req.body;
 
       const job = await Job.create({
         client: req.user._id,
         title,
         description,
-        requiredSkills,
+        requiredSkills: requiredSkills.map((s) => s.toLowerCase().trim()),
         location,
+        coordinates,
         budget,
       });
 
       const io = req.app.get("io");
 
-      
+      // Find all workers and notify them
+      const workers = await User.find({ role: "worker" });
+
+      await Promise.all(
+        workers.map((worker) =>
+          Notification.create({
+            userId: worker._id,
+            message: `New job posted: ${job.title}`,
+            type: "NEW_JOB",
+            jobId: job._id,
+          })
+        )
+      );
+
       setTimeout(() => {
         console.log("🚀 Emitting jobUpdated");
         io.emit("jobUpdated");
+        io.emit("notificationUpdated");
       }, 200);
 
       res.status(201).json(job);
@@ -73,13 +89,13 @@ router.get(
             matchPercentage: Math.round(matchScore),
           };
         })
-        .filter((job) => job.matchPercentage > 0) // remove 0% matches
+        .filter((job) => job.matchPercentage > 0)
         .sort((a, b) => {
-            if (b.matchPercentage === a.matchPercentage) {
-              return new Date(b.createdAt) - new Date(a.createdAt);
-            }
-            return b.matchPercentage - a.matchPercentage;
-          });
+          if (b.matchPercentage === a.matchPercentage) {
+            return new Date(b.createdAt) - new Date(a.createdAt);
+          }
+          return b.matchPercentage - a.matchPercentage;
+        });
 
       res.json({ jobs: rankedJobs });
 
@@ -88,7 +104,6 @@ router.get(
     }
   }
 );
-
 
 // Worker Apply to Job
 router.post(
@@ -107,18 +122,17 @@ router.post(
         return res.status(400).json({ message: "Job is not open" });
       }
 
-      // Ensure applications array exists (important for old jobs)
       if (!job.applications) {
-  job.applications = [];
-}
+        job.applications = [];
+      }
 
-const alreadyApplied = job.applications.find(
-  (app) => app.worker.equals(req.user._id)
-);
+      const alreadyApplied = job.applications.find(
+        (app) => app.worker.equals(req.user._id)
+      );
 
-if (alreadyApplied) {
-  return res.status(400).json({ message: "Already applied to this job" });
-}
+      if (alreadyApplied) {
+        return res.status(400).json({ message: "Already applied to this job" });
+      }
 
       job.applications.push({
         worker: req.user._id,
@@ -128,10 +142,18 @@ if (alreadyApplied) {
 
       const io = req.app.get("io");
 
-      // ensure emit happens AFTER DB is fully settled
+      // Notify client about new application
+      await Notification.create({
+        userId: job.client,
+        message: `A worker applied to your job: ${job.title}`,
+        type: "NEW_APPLICATION",
+        jobId: job._id,
+      });
+
       setTimeout(() => {
         console.log("🚀 Emitting jobUpdated");
         io.emit("jobUpdated");
+        io.emit("notificationUpdated");
       }, 200);
 
       res.json({ message: "Application submitted successfully" });
@@ -155,17 +177,14 @@ router.put(
         return res.status(404).json({ message: "Job not found" });
       }
 
-      // Only job owner can accept
       if (!job.client.equals(req.user.id)) {
         return res.status(403).json({ message: "Not authorized" });
       }
 
-      // Job must be OPEN
       if (job.status !== "OPEN") {
         return res.status(400).json({ message: "Job is not open" });
       }
 
-      // Check if worker applied
       const hasApplied = job.applications.some(
         (app) => app.worker.toString() === workerId.toString()
       );
@@ -173,6 +192,7 @@ router.put(
       if (!hasApplied) {
         return res.status(400).json({ message: "Worker did not apply" });
       }
+
       job.applications = job.applications.filter(
         (app) => app.worker.toString() === workerId.toString()
       );
@@ -181,6 +201,17 @@ router.put(
       job.assignedWorker = workerId;
 
       await job.save();
+
+      // Notify worker about acceptance
+      await Notification.create({
+        userId: workerId,
+        message: `You have been accepted for the job: ${job.title}`,
+        type: "JOB_ACCEPTED",
+        jobId: job._id,
+      });
+
+      const io = req.app.get("io");
+      io.emit("notificationUpdated");
 
       res.json({
         message: "Worker accepted successfully",
@@ -205,7 +236,6 @@ router.put(
         return res.status(404).json({ message: "Job not found" });
       }
 
-      // Only job owner can complete
       if (!job.client.equals(req.user._id)) {
         return res.status(403).json({ message: "Not authorized" });
       }
@@ -218,6 +248,17 @@ router.put(
 
       job.status = "COMPLETED";
       await job.save();
+
+      // Notify worker about completion
+      await Notification.create({
+        userId: job.assignedWorker,
+        message: `Your job has been marked as completed: ${job.title}`,
+        type: "JOB_COMPLETED",
+        jobId: job._id,
+      });
+
+      const io = req.app.get("io");
+      io.emit("notificationUpdated");
 
       res.json({
         message: "Job marked as completed",
@@ -250,9 +291,10 @@ router.get(
       const totalJobs = await Job.countDocuments(filter);
 
       const jobs = await Job.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("client", "name phone");
 
       res.json({
         totalJobs,
@@ -284,22 +326,18 @@ router.put(
         return res.status(404).json({ message: "Job not found" });
       }
 
-      // Only job owner can rate
       if (!job.client.equals(req.user._id)) {
         return res.status(403).json({ message: "Not authorized" });
       }
 
-      // Job must be completed
       if (job.status !== "COMPLETED") {
         return res.status(400).json({ message: "Job not completed yet" });
       }
 
-      // Prevent double rating
       if (job.isRated) {
         return res.status(400).json({ message: "Job already rated" });
       }
 
-      // Update worker rating
       const worker = await User.findById(job.assignedWorker);
 
       worker.totalRating += rating;
@@ -310,6 +348,17 @@ router.put(
 
       job.isRated = true;
       await job.save();
+
+      // Notify worker about rating
+      await Notification.create({
+        userId: job.assignedWorker,
+        message: `You received a ${rating} star rating for: ${job.title}`,
+        type: "JOB_RATED",
+        jobId: job._id,
+      });
+
+      const io = req.app.get("io");
+      io.emit("notificationUpdated");
 
       res.json({ message: "Worker rated successfully", worker });
 
@@ -340,9 +389,11 @@ router.get(
       const totalJobs = await Job.countDocuments(filter);
 
       const jobs = await Job.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("applications.worker", "name rating ratingCount")
+        .populate("assignedWorker", "name rating ratingCount");
 
       res.json({
         totalJobs,
@@ -355,7 +406,5 @@ router.get(
     }
   }
 );
-
-
 
 export default router;
