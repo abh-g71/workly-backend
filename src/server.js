@@ -27,13 +27,18 @@ app.use("/api/jobs", jobRoutes);
 
 app.use("/api/notifications", notificationRoutes);
 
+app.set("trust proxy", 1);
+
 //Test Route
 app.get("/", (req, res) => {
   res.json({ message: "Workly API running 🚀" });
 });
 
 //MongoDB Connection
-mongoose.connect(process.env.MONGO_URI)
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
   .then(() => {
     console.log("MongoDB Connected ✅");
 
@@ -56,9 +61,11 @@ mongoose.connect(process.env.MONGO_URI)
       });
     });
 
-    server.listen(process.env.PORT, () => {
-      console.log(`Server running on PORT ${process.env.PORT}`);
-    });
+    const PORT = process.env.PORT || 10000;
+
+server.listen(PORT, () => {
+  console.log(`Server running on PORT ${PORT}`);
+});
 
   }) // ✅ THIS WAS MISSING
   .catch((err) => {
