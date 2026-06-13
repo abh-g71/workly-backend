@@ -5,11 +5,24 @@ import Worker from "../models/workerModel.js";
 
 export const registerUser = async (req, res) => {
   try {
-    const { name, phone, role } = req.body;
+    
+    const { name, phone, password, role } = req.body;
 
-    if (!name || !phone || !role) {
+    if (!/^\d{10}$/.test(phone)) {
+  return res.status(400).json({
+    message: "Phone number must be exactly 10 digits",
+  });
+}
+
+    if (!name || !phone || !password || !role) {
       return res.status(400).json({
         message: "Name, phone and role are required",
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        message: "Password must be at least 6 characters long",
       });
     }
 
@@ -24,6 +37,7 @@ export const registerUser = async (req, res) => {
     const user = await User.create({
       name,
       phone,
+      password,
       role,
     });
 
@@ -41,7 +55,7 @@ export const registerUser = async (req, res) => {
 // Login User (Phone-based)
 export const loginUser = async (req, res) => {
   try {
-    const { phone } = req.body;
+    const { phone , password} = req.body;
 
     if (!phone) {
       return res.status(400).json({
@@ -54,6 +68,12 @@ export const loginUser = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         message: "User not found",
+      });
+    }
+
+    if (user.password !== password) {
+      return res.status(401).json({
+        message: "Invalid password",
       });
     }
 

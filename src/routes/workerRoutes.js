@@ -1,12 +1,11 @@
 import express from "express";
 import Worker from "../models/workerModel.js";
 import { protect } from "../middleware/authMiddleware.js";
-
 import authorizeRoles from "../middleware/roleMiddleware.js";
 
 const router = express.Router();
 
-// Create Worker Profile (only worker role)
+// Create Worker Profile
 router.post(
   "/create",
   protect,
@@ -15,8 +14,9 @@ router.post(
     try {
       const { skills, experience, location, hourlyRate } = req.body;
 
-      // Check if worker profile already exists
-      const existingProfile = await Worker.findOne({ user: req.user._id });
+      const existingProfile = await Worker.findOne({
+        user: req.user._id,
+      });
 
       if (existingProfile) {
         return res.status(400).json({
@@ -30,9 +30,15 @@ router.post(
         });
       }
 
+      if (hourlyRate <= 0) {
+        return res.status(400).json({
+          message: "Hourly rate must be greater than 0",
+        });
+      }
+
       const worker = await Worker.create({
         user: req.user._id,
-        skills,
+        skills: skills.map((s) => s.toLowerCase().trim()),
         experience,
         location,
         hourlyRate,
@@ -42,35 +48,54 @@ router.post(
         message: "Worker profile created successfully",
         worker,
       });
-
     } catch (error) {
-      res.status(500).json({ message: error.message });
+      res.status(500).json({
+        message: error.message,
+      });
     }
   }
 );
 
-// Get all workers (only client can see)
+// Get All Workers (Client Only)
 router.get(
   "/all",
   protect,
   authorizeRoles("client"),
   async (req, res) => {
-    const workers = await Worker.find().populate("user", "name phone");
-    res.json(workers);
+    try {
+      const workers = await Worker.find().populate(
+        "user",
+        "name phone"
+      );
+
+      res.json(workers);
+    } catch (error) {
+      res.status(500).json({
+        message: error.message,
+      });
+    }
   }
 );
 
-// Get worker profile
+// Get My Worker Profile
 router.get(
   "/me",
   protect,
   authorizeRoles("worker"),
   async (req, res) => {
     try {
-      const profile = await Worker.findOne({ user: req.user._id });
-      res.json({ hasProfile: !!profile, profile });
+      const profile = await Worker.findOne({
+        user: req.user._id,
+      }).populate("user", "name phone");
+
+      res.json({
+        hasProfile: !!profile,
+        profile,
+      });
     } catch (error) {
-      res.status(500).json({ message: error.message });
+      res.status(500).json({
+        message: error.message,
+      });
     }
   }
 );
@@ -84,22 +109,50 @@ router.put(
     try {
       const { skills, experience, location, hourlyRate } = req.body;
 
-      const profile = await Worker.findOne({ user: req.user._id });
+      const profile = await Worker.findOne({
+        user: req.user._id,
+      });
 
       if (!profile) {
-        return res.status(404).json({ message: "Profile not found" });
+        return res.status(404).json({
+          message: "Profile not found",
+        });
       }
 
-      profile.skills = skills.map((s) => s.toLowerCase().trim());
-      profile.experience = experience;
-      profile.location = location;
-      profile.hourlyRate = hourlyRate;
+      if (skills) {
+        profile.skills = skills.map((s) =>
+          s.toLowerCase().trim()
+        );
+      }
+
+      if (experience !== undefined) {
+        profile.experience = experience;
+      }
+
+      if (location !== undefined) {
+        profile.location = location;
+      }
+
+      if (hourlyRate !== undefined) {
+        if (hourlyRate <= 0) {
+          return res.status(400).json({
+            message: "Hourly rate must be greater than 0",
+          });
+        }
+
+        profile.hourlyRate = hourlyRate;
+      }
 
       await profile.save();
 
-      res.json({ message: "Profile updated successfully", profile });
+      res.json({
+        message: "Profile updated successfully",
+        profile,
+      });
     } catch (error) {
-      res.status(500).json({ message: error.message });
+      res.status(500).json({
+        message: error.message,
+      });
     }
   }
 );
