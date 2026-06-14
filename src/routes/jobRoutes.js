@@ -83,7 +83,7 @@ router.get(
       const rankedJobs = openJobs
         .map((job) => {
           const matchedSkills = job.requiredSkills.filter((skill) =>
-            workerProfile.skills.includes(skill)
+            workerProfile.skills.map(s => s.toLowerCase().trim()).includes(skill)
           );
 
           const matchScore =
