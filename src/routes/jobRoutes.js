@@ -45,8 +45,13 @@ router.post(
 
       setTimeout(() => {
         console.log("🚀 Emitting jobUpdated");
-        io.emit("jobUpdated");
-        io.emit("notificationUpdated");
+                io.emit("jobUpdated", {
+          type: "NEW_JOB",
+        });
+
+        io.emit("notificationUpdated", {
+          type: "NEW_JOB",
+        });
       }, 200);
 
       res.status(201).json(job);
@@ -152,8 +157,13 @@ router.post(
 
       setTimeout(() => {
         console.log("🚀 Emitting jobUpdated");
-        io.emit("jobUpdated");
-        io.emit("notificationUpdated");
+                io.emit("jobUpdated", {
+          type: "NEW_APPLICATION",
+        });
+
+        io.emit("notificationUpdated", {
+          type: "NEW_APPLICATION",
+        });
       }, 200);
 
       res.json({ message: "Application submitted successfully" });
@@ -211,7 +221,10 @@ router.put(
       });
 
       const io = req.app.get("io");
-      io.emit("notificationUpdated");
+
+        io.emit("notificationUpdated", {
+          type: "JOB_ACCEPTED",
+        });
 
       res.json({
         message: "Worker accepted successfully",
@@ -258,7 +271,10 @@ router.put(
       });
 
       const io = req.app.get("io");
-      io.emit("notificationUpdated");
+
+        io.emit("notificationUpdated", {
+          type: "JOB_COMPLETED",
+        });
 
       res.json({
         message: "Job marked as completed",
@@ -358,7 +374,10 @@ router.put(
       });
 
       const io = req.app.get("io");
-      io.emit("notificationUpdated");
+
+        io.emit("notificationUpdated", {
+          type: "JOB_RATED",
+        });
 
       res.json({ message: "Worker rated successfully", worker });
 
