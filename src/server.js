@@ -16,7 +16,10 @@ dotenv.config();
 const app = express();
 
 //Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.CLIENT_URL,
+  credentials: true
+}));
 app.use(express.json());
 
 app.use("/api/users", userRoutes);
@@ -43,7 +46,8 @@ mongoose.connect(process.env.MONGO_URI)
 
     const io = new Server(server, {
       cors: {
-        origin: "*",
+        origin: process.env.CLIENT_URL,
+        credentials: true,
       },
     });
 
